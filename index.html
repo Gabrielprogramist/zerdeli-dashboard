@@ -1464,6 +1464,7 @@ function renderSchool(){
   }
 
   // Weak/strong chapters — split by subject when filter = 'Барлығы'
+  // Математика → тарау (chapter); Ағылшын → тақырып (subname), себебі оның тараулары юнит бойынша
   {
     const wrap = document.getElementById('schChaptersWrap');
     let chs = DATA.chapters.filter(c=>c.school_short===school);
@@ -1474,6 +1475,37 @@ function renderSchool(){
     const subjMeta = {
       'Математика': {short:'М', accent:'badge-amber', icon:'➗'},
       'Ағылшын':    {short:'А', accent:'badge-green', icon:'🇬🇧'}
+    };
+
+    // English: aggregate sub_name at (school × grade × sub_name) level from per-student data
+    const engSubnameAgg = ()=>{
+      const engIdx = DATA.meta.subjects.indexOf('Ағылшын');
+      const snDict = DATA.meta.subnameDict || [];
+      const userGrade = {};
+      for(const st of DATA.students){
+        if(st.school_short===school && st.subject==='Ағылшын' &&
+           (grade==='all' || st.grade_name===parseInt(grade))){
+          userGrade[st.user_id] = st.grade_name;
+        }
+      }
+      const agg = {};
+      for(const uid in userGrade){
+        const g = userGrade[uid];
+        const subs = DATA.studentSubnames[uid] || [];
+        for(const r of subs){
+          if(r[0] !== engIdx) continue;
+          const name = snDict[r[2]];
+          const key = g + '|' + name;
+          if(!agg[key]) agg[key] = {q:0, c:0, grade_name:g, chapter_name:name, subject:'Ағылшын'};
+          agg[key].q += r[3];
+          agg[key].c += r[4];
+        }
+      }
+      return Object.values(agg).map(v=>({
+        chapter_name: v.chapter_name, subject: 'Ағылшын', grade_name: v.grade_name,
+        questions: v.q, correct: v.c,
+        accuracy: v.q ? round1(v.c/v.q*100) : 0
+      })).filter(c=>c.questions>=15);
     };
 
     const renderBars = (list, mode, hideSubjBadge)=>{
@@ -1488,7 +1520,9 @@ function renderSchool(){
 
     let html = '';
     for(const s of subjectsToShow){
-      const sChs = chs.filter(c=>c.subject===s);
+      // Math uses chapters; English uses subnames
+      const sChs = (s==='Ағылшын') ? engSubnameAgg() : chs.filter(c=>c.subject===s);
+      const unitWord = (s==='Ағылшын') ? 'тақырып' : 'тарау';
       const weak = sChs.slice().sort((a,b)=>a.accuracy-b.accuracy).slice(0,12);
       const strong = sChs.slice().sort((a,b)=>b.accuracy-a.accuracy).slice(0,12);
       const meta = subjMeta[s];
@@ -1501,19 +1535,19 @@ function renderSchool(){
       if(subjectsToShow.length>1){
         html += `<div class="section-title" style="display:flex;align-items:center;gap:10px;margin-top:14px">
           <span class="badge ${meta.accent}" style="font-size:12px;padding:4px 10px">${s}</span>
-          ${accAvg!==null?`<span style="color:var(--muted);font-size:11px">мектеп бойынша орташа: <b style="color:var(--text)">${accAvg}%</b> · ${sChs.length} тарау</span>`:''}
+          ${accAvg!==null?`<span style="color:var(--muted);font-size:11px">мектеп бойынша орташа: <b style="color:var(--text)">${accAvg}%</b> · ${sChs.length} ${unitWord}${s==='Ағылшын'?' (юнит емес — нақты тақырыптар)':''}</span>`:''}
         </div>`;
       }
 
       html += `<div class="grid-2">
         <div class="card">
-          <h2>${subjectsToShow.length>1?'Әлсіз':'Мектептің ең әлсіз'} тақырыптары<span class="badge-inline">${meta.short}</span></h2>
-          <div class="desc">Ең нашар игерілген тарау/тақырыптар (≥15 сұрақ)</div>
+          <h2>${subjectsToShow.length>1?'Әлсіз':'Мектептің ең әлсіз'} ${unitWord}тары<span class="badge-inline">${meta.short}</span></h2>
+          <div class="desc">Ең нашар игерілген ${unitWord}тар (≥15 сұрақ)</div>
           <div class="bar-list">${renderBars(weak, 'warn', subjectsToShow.length>1)}</div>
         </div>
         <div class="card">
-          <h2>${subjectsToShow.length>1?'Күшті':'Мектептің ең күшті'} тақырыптары<span class="badge-inline">${meta.short}</span></h2>
-          <div class="desc">Жоғары дұрыстық пайызы бар тарау/тақырыптар (≥15 сұрақ)</div>
+          <h2>${subjectsToShow.length>1?'Күшті':'Мектептің ең күшті'} ${unitWord}тары<span class="badge-inline">${meta.short}</span></h2>
+          <div class="desc">Жоғары дұрыстық пайызы бар ${unitWord}тар (≥15 сұрақ)</div>
           <div class="bar-list">${renderBars(strong, 'good', subjectsToShow.length>1)}</div>
         </div>
       </div>`;
