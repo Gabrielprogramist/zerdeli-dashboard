@@ -610,8 +610,8 @@
 
     <div class="kpis" id="indKpis"></div>
 
-    <div class="section-title">Тарау бойынша талдау</div>
-    <div class="grid-2" id="indChaptersBlock"></div>
+    <div class="section-title">Тарау бойынша талдау <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)">· тек Математика (Ағылшынның тараулары юнит бойынша — мағынасыз)</span></div>
+    <div id="indChaptersBlock"></div>
 
     <div class="section-title">Тақырып (subname) бойынша талдау</div>
     <div class="grid-2" id="indSubnamesBlock"></div>
@@ -1913,26 +1913,28 @@ function renderIndividual(){
     const short = subj==='Математика' ? 'М' : 'А';
     const subjLabel = subj==='Математика' ? 'badge-amber' : 'badge-green';
 
-    // CHAPTERS for this subject
-    const chs = stuChapters.filter(r=>r[0]===si).map(r=>{
-      const chName = CHAPTER_DICT[r[1]];
-      const studentAcc = pct(r[3], r[2]);
-      const networkAcc = netCh[`${gradeNum}|${subj}|${chName}`] || null;
-      const delta = (studentAcc!==null && networkAcc!==null) ? Math.round((studentAcc-networkAcc)*10)/10 : null;
-      return {chapter: chName, q: r[2], c: r[3], studentAcc, networkAcc, delta};
-    }).sort((a,b)=> (b.q||0) - (a.q||0));
+    // CHAPTERS — only for Математика (Ағылшынның тараулары юнит бойынша, мағынасыз)
+    if(subj === 'Математика'){
+      const chs = stuChapters.filter(r=>r[0]===si).map(r=>{
+        const chName = CHAPTER_DICT[r[1]];
+        const studentAcc = pct(r[3], r[2]);
+        const networkAcc = netCh[`${gradeNum}|${subj}|${chName}`] || null;
+        const delta = (studentAcc!==null && networkAcc!==null) ? Math.round((studentAcc-networkAcc)*10)/10 : null;
+        return {chapter: chName, q: r[2], c: r[3], studentAcc, networkAcc, delta};
+      }).sort((a,b)=> (b.q||0) - (a.q||0));
 
-    if(chs.length){
-      chWrap.insertAdjacentHTML('beforeend', `
-        <div class="card">
-          <h2><span class="badge ${subjLabel}">${short}</span> ${subj} — тараулар</h2>
-          <div class="desc">Әр тарау бойынша оқушының көрсеткіші vs желі орташасы (осы сынып деңгейі)</div>
-          ${chs.map(c=>indBarRow(c.chapter, c.studentAcc, c.networkAcc, c.delta, c.q, c.c)).join('')}
-        </div>
-      `);
+      if(chs.length){
+        chWrap.insertAdjacentHTML('beforeend', `
+          <div class="card">
+            <h2><span class="badge ${subjLabel}">${short}</span> ${subj} — тараулар</h2>
+            <div class="desc">Әр тарау бойынша оқушының көрсеткіші vs желі орташасы (осы сынып деңгейі)</div>
+            ${chs.map(c=>indBarRow(c.chapter, c.studentAcc, c.networkAcc, c.delta, c.q, c.c)).join('')}
+          </div>
+        `);
+      }
     }
 
-    // SUBNAMES for this subject — group by chapter
+    // SUBNAMES for this subject
     const sns = stuSubnames.filter(r=>r[0]===si).map(r=>{
       const chName = CHAPTER_DICT[r[1]];
       const snName = SUBNAME_DICT[r[2]];
@@ -1943,23 +1945,31 @@ function renderIndividual(){
     }).sort((a,b)=> a.studentAcc - b.studentAcc);  // weakest first
 
     if(sns.length){
-      // Group by chapter
-      const groups = {};
-      for(const r of sns){ (groups[r.chapter] = groups[r.chapter] || []).push(r); }
-      let groupsHtml = '';
-      for(const ch of Object.keys(groups)){
-        const items = groups[ch];
-        groupsHtml += `<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:6px">${ch}</div>`;
-        for(const r of items){
-          groupsHtml += indBarRow(r.sub, r.studentAcc, r.networkAcc, r.delta, r.q, r.c);
+      let bodyHtml;
+      if(subj === 'Математика'){
+        // Math: group subnames by chapter (chapters are meaningful)
+        const groups = {};
+        for(const r of sns){ (groups[r.chapter] = groups[r.chapter] || []).push(r); }
+        bodyHtml = '';
+        for(const ch of Object.keys(groups)){
+          bodyHtml += `<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:6px">${ch}</div>`;
+          for(const r of groups[ch]){
+            bodyHtml += indBarRow(r.sub, r.studentAcc, r.networkAcc, r.delta, r.q, r.c);
+          }
+          bodyHtml += `</div>`;
         }
-        groupsHtml += `</div>`;
+      } else {
+        // English: flat list, weakest first (chapters = units, no grouping)
+        bodyHtml = sns.map(r=>indBarRow(r.sub, r.studentAcc, r.networkAcc, r.delta, r.q, r.c)).join('');
       }
+      const descTxt = subj === 'Математика'
+        ? 'Тақырып бойынша көрсеткіш · тарауларға топталған · ең әлсізден күштіге'
+        : 'Тақырып бойынша көрсеткіш · ең әлсізден күштіге қарай · сан = жауап саны';
       snWrap.insertAdjacentHTML('beforeend', `
         <div class="card">
           <h2><span class="badge ${subjLabel}">${short}</span> ${subj} — тақырыптар</h2>
-          <div class="desc">Тақырып бойынша көрсеткіш · ең әлсізден күштіге қарай · сан = жауап саны</div>
-          ${groupsHtml}
+          <div class="desc">${descTxt}</div>
+          ${bodyHtml}
         </div>
       `);
     }
